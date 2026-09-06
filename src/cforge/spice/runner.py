@@ -22,19 +22,50 @@ import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 __all__ = [
     "RETRY_LADDER",
     "NgspiceNotFound",
+    "RawPlot",
     "SpiceRun",
     "measurements_from_log",
     "ngspice_version",
+    "parse_raw",
     "run",
 ]
 
 
 class NgspiceNotFound(RuntimeError):
     """Raised when the ngspice executable cannot be located on PATH."""
+
+
+@dataclass
+class RawPlot:
+    """One analysis worth of data read back from an ngspice ASCII rawfile.
+
+    ``vectors`` maps the lowercased vector name (``frequency``, ``v(out)``,
+    ``i(v1)``, ...) to a complex-valued numpy array.  Real analyses (``.tran``,
+    ``.dc``) still yield complex arrays with zero imaginary part so callers
+    have one code path; take ``.real`` when plotting them.
+    """
+
+    name: str
+    vectors: dict[str, "np.ndarray[Any, np.dtype[np.complex128]]"]
+
+    @property
+    def kind(self) -> str:
+        """``ac``, ``tran``, ``dc``, ``op`` or ``other``, from the plot title."""
+        lowered = self.name.lower()
+        for key in ("ac", "transient", "dc", "operating"):
+            if key in lowered:
+                return {"transient": "tran", "operating": "op"}.get(key, key)
+        return "other"
+
+    def get(self, name: str) -> "np.ndarray[Any, np.dtype[np.complex128]] | None":
+        return self.vectors.get(name.strip().lower())
 
 
 @dataclass
@@ -56,6 +87,14 @@ class SpiceRun:
     error: str = ""
     options_applied: list[str] = field(default_factory=list)
     netlist: str = ""
+    plots: list[RawPlot] = field(default_factory=list)
+
+    def plot(self, kind: str) -> RawPlot | None:
+        """First plot of the given kind (``ac``, ``tran``, ``dc``), if any."""
+        for candidate in self.plots:
+            if candidate.kind == kind:
+                return candidate
+        return None
 
     def get(self, name: str) -> float | None:
         """Measurement value by name, case-insensitively; None if absent or failed."""
@@ -92,8 +131,13 @@ _CONVERGENCE_MARKERS: tuple[str, ...] = (
 #   settle_time_s       =  failed
 # and, for .measure over multiple points, occasionally a trailing "at=" clause.
 _MEAS_RE = re.compile(
-    r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(?P<value>\S+)",
+    r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_.\[\]]*)\s*=\s*(?P<value>\S+)(?P<rest>.*)$",
 )
+
+# ngspice's memory report ends with lines such as "Stack = 0 bytes." which are
+# shaped exactly like a measurement.  A real .meas line has nothing after the
+# value except further measurement clauses, so that is what we require.
+_MEAS_TRAILER_RE = re.compile(r"^\s*(targ|trig|at|from|to|=)\b", re.IGNORECASE)
 
 _NUMBER_RE = re.compile(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$")
 
@@ -216,6 +260,9 @@ def measurements_from_log(text: str) -> tuple[dict[str, float], list[str]]:
                 failed.append(name)
             values.pop(name, None)
             continue
+        rest = match.group("rest").strip()
+        if rest and not _MEAS_TRAILER_RE.match(rest):
+            continue
         number = _parse_number(token)
         if number is None:
             continue
@@ -223,6 +270,85 @@ def measurements_from_log(text: str) -> tuple[dict[str, float], list[str]]:
             continue
         values[name] = number
     return values, failed
+
+
+def parse_raw(text: str) -> list[RawPlot]:
+    """Parse an ngspice ASCII rawfile into one :class:`RawPlot` per analysis.
+
+    The format is a sequence of blocks, each with a ``Plotname:`` header, a
+    ``Variables:`` table and a ``Values:`` section.  ``Flags: complex`` marks
+    AC data, whose samples are written as ``real,imag`` pairs.
+
+    Parsing never raises on malformed data: plot data is a convenience for the
+    report, and losing it must not fail a run whose measurements are fine.
+    """
+    plots: list[RawPlot] = []
+    lines = text.splitlines()
+    i = 0
+    n = len(lines)
+    while i < n:
+        if not lines[i].startswith("Plotname:"):
+            i += 1
+            continue
+        name = lines[i].split(":", 1)[1].strip()
+        complex_flag = False
+        n_vars = 0
+        n_points = 0
+        names: list[str] = []
+        i += 1
+        while i < n and not lines[i].startswith("Values:"):
+            line = lines[i]
+            if line.startswith("Flags:"):
+                complex_flag = "complex" in line.lower()
+            elif line.startswith("No. Variables:"):
+                n_vars = _safe_int(line.split(":", 1)[1])
+            elif line.startswith("No. Points:"):
+                n_points = _safe_int(line.split(":", 1)[1])
+            elif line.startswith("Variables:"):
+                for _ in range(n_vars):
+                    i += 1
+                    if i >= n:
+                        break
+                    parts = lines[i].split()
+                    names.append(parts[1].lower() if len(parts) >= 2 else f"v{len(names)}")
+            i += 1
+        i += 1  # step past "Values:"
+
+        if n_vars == 0 or not names:
+            continue
+        columns: list[list[complex]] = [[] for _ in names]
+        read = 0
+        while i < n and read < n_points:
+            for var in range(n_vars):
+                if i >= n:
+                    break
+                token = lines[i].split()[-1] if lines[i].split() else ""
+                columns[var].append(_parse_complex(token, complex_flag))
+                i += 1
+            read += 1
+        vectors = {
+            names[k]: np.asarray(columns[k], dtype=np.complex128) for k in range(len(names))
+        }
+        plots.append(RawPlot(name=name, vectors=vectors))
+    return plots
+
+
+def _safe_int(token: str) -> int:
+    try:
+        return int(token.strip())
+    except ValueError:
+        return 0
+
+
+def _parse_complex(token: str, complex_flag: bool) -> complex:
+    """Parse one rawfile sample.  Unparseable samples become NaN, not exceptions."""
+    try:
+        if complex_flag and "," in token:
+            real_text, imag_text = token.split(",", 1)
+            return complex(float(real_text), float(imag_text))
+        return complex(float(token), 0.0)
+    except ValueError:
+        return complex("nan")
 
 
 def _has_convergence_failure(text: str) -> bool:
@@ -261,10 +387,10 @@ def _dc_nodeset(
     """
     body = _strip_analyses(netlist)
     probe = _insert_before_end(body, ".op\n.print all")
-    result = _invoke(probe, exe, workdir / "nodeset", timeout_s)
-    if result is None:
+    outcome = _invoke(probe, exe, workdir / "nodeset", timeout_s)
+    if outcome is None:
         return None
-    text = result[0]
+    text = outcome[0]
     voltages: dict[str, float] = {}
     for raw in text.splitlines():
         match = re.match(r"^\s*V\(([^)]+)\)\s*=\s*(\S+)", raw, flags=re.IGNORECASE)
@@ -294,9 +420,14 @@ def _strip_analyses(netlist: str) -> str:
 
 
 def _invoke(
-    netlist: str, exe: str, workdir: Path, timeout_s: int
-) -> tuple[str, str, int] | None:
-    """Run ngspice once.  Returns ``(combined_output, stderr, returncode)``.
+    netlist: str, exe: str, workdir: Path, timeout_s: int, rawfile: bool = False
+) -> tuple[str, str, int, list[RawPlot]] | None:
+    """Run ngspice once.  Returns ``(combined_output, stderr, returncode, plots)``.
+
+    ``rawfile`` selects the *plot-data pass*.  ngspice 42 refuses outright to
+    evaluate ``.meas`` in batch mode when ``-r`` is given ("No .measure
+    possible in batch mode (-b) with -r rawfile set!"), so measurements and
+    waveform data must come from two separate invocations of the same deck.
 
     Returns None if the process timed out or could not be started; the caller
     turns that into ``ok=False``.
@@ -304,10 +435,14 @@ def _invoke(
     workdir.mkdir(parents=True, exist_ok=True)
     cir = workdir / "circuit.cir"
     log = workdir / "ngspice.log"
+    raw = workdir / "circuit.raw"
     cir.write_text(netlist, encoding="utf-8")
-    argv: Sequence[str] = [exe, "-b", "-o", str(log), str(cir)]
+    argv: list[str] = [exe, "-b", "-o", str(log)]
+    if rawfile:
+        argv += ["-r", str(raw)]
+    argv.append(str(cir))
     env = dict(os.environ)
-    env.setdefault("SPICE_ASCIIRAWFILE", "1")
+    env["SPICE_ASCIIRAWFILE"] = "1"
     try:
         proc = subprocess.run(  # noqa: S603 - argv list, never shell=True
             argv,
@@ -324,7 +459,10 @@ def _invoke(
         return None
     log_text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     combined = "\n".join(part for part in (log_text, proc.stdout, proc.stderr) if part)
-    return combined, proc.stderr, proc.returncode
+    plots: list[RawPlot] = []
+    if rawfile and raw.exists():
+        plots = parse_raw(raw.read_text(encoding="utf-8", errors="replace"))
+    return combined, proc.stderr, proc.returncode, plots
 
 
 def run(
@@ -332,6 +470,7 @@ def run(
     timeout_s: int = 60,
     workdir: Path | None = None,
     max_attempts: int = len(RETRY_LADDER),
+    collect_plots: bool = False,
 ) -> SpiceRun:
     """Simulate ``netlist`` with ngspice, climbing the convergence ladder as needed.
 
@@ -340,6 +479,10 @@ def run(
     ``workdir`` receives the generated ``circuit.cir`` and ``ngspice.log`` for
     each attempt (in numbered sub-directories); when omitted a temp dir is used
     and removed afterwards.
+
+    ``collect_plots`` adds a second invocation of the winning deck with ``-r``
+    to capture waveform data for the report.  It is off by default because
+    Monte Carlo needs measurements only and this doubles the simulation cost.
     """
     exe = ngspice_executable()
     tmp: tempfile.TemporaryDirectory[str] | None = None
@@ -351,7 +494,12 @@ def run(
         base.mkdir(parents=True, exist_ok=True)
 
     try:
-        return _run_ladder(netlist, exe, base, timeout_s, max_attempts)
+        result = _run_ladder(netlist, exe, base, timeout_s, max_attempts)
+        if collect_plots and result.converged and result.netlist:
+            outcome = _invoke(result.netlist, exe, base / "plotdata", timeout_s, rawfile=True)
+            if outcome is not None:
+                result.plots = outcome[3]
+        return result
     finally:
         if tmp is not None:
             tmp.cleanup()
@@ -389,7 +537,7 @@ def _run_ladder(
             )
             continue
 
-        combined, stderr, returncode = outcome
+        combined, stderr, returncode, plots = outcome
         values, failed = measurements_from_log(combined)
         converged = not _has_convergence_failure(combined)
         ok = converged and returncode == 0
@@ -404,6 +552,7 @@ def _run_ladder(
             error="" if ok else _describe_failure(combined, returncode, converged),
             options_applied=list(applied),
             netlist=candidate,
+            plots=plots,
         )
         if converged:
             return last

@@ -1,0 +1,29 @@
+name: lp_1k
+block: lowpass_filter
+params:
+  fc_hz: 1000
+  order: 1
+  response: butterworth
+  gain: 1.0
+eseries: E96
+tolerance_percent:
+  R: 1.0
+  C: 5.0
+requirements:
+  - id: REQ-001
+    meas: fc_hz
+    min: 950
+    max: 1050
+    unit: Hz
+    description: "-3 dB corner within +/-5% of 1 kHz"
+  - id: REQ-002
+    meas: gain_db_passband
+    min: -0.5
+    max: 0.5
+    unit: dB
+    description: "Flat unity-gain passband well below the corner"
+  - id: REQ-003
+    meas: atten_db_at_10fc
+    max: -19.0
+    unit: dB
+    description: "At least 19 dB attenuation one decade above the corner"
