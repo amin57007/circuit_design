@@ -432,6 +432,9 @@ def _invoke(
     Returns None if the process timed out or could not be started; the caller
     turns that into ``ok=False``.
     """
+    # Absolute paths throughout: cwd is set to workdir below, so a relative -o
+    # or -r path would be resolved against it a second time and land nowhere.
+    workdir = workdir.resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     cir = workdir / "circuit.cir"
     log = workdir / "ngspice.log"

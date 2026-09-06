@@ -99,6 +99,22 @@ def testbench_context(spec: Any, values: dict[str, float]) -> dict[str, Any]:
     }
 
 
+def plot_markers(
+    spec: Any, values: dict[str, float], measurements: dict[str, float]
+) -> dict[str, tuple[float, float]]:
+    """Frequency (Hz) at which each spot measurement was taken, for the Bode plot."""
+    fc_hz = spec.num_param("fc_hz")
+    frequencies = {
+        "gain_db_passband": fc_hz / 100.0,
+        "atten_db_at_10fc": fc_hz * 10.0,
+    }
+    return {
+        name: (freq, measurements[name])
+        for name, freq in frequencies.items()
+        if name in measurements
+    }
+
+
 def check_load_impedance(spec: Any, components: list[Any], context: dict[str, Any]) -> str | None:
     """GOTCHA-RC-01: a load comparable to R1 shifts the corner."""
     if "rload_ohm" not in spec.params:
