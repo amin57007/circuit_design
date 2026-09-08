@@ -234,8 +234,16 @@ class TestModelLib:
 
     def test_subckt_block_is_captured_through_ends(self) -> None:
         text = modellib.resolve("OPAMP_GENERIC")
-        assert text.lower().startswith(".subckt")
-        assert text.strip().lower().endswith(".ends opamp_generic")
+        lowered = text.lower()
+        # Macromodels pull in internal .model cards first so the netlist is
+        # self-contained (OPAMP_GENERIC needs DCLAMP).
+        assert ".subckt opamp_generic" in lowered
+        assert lowered.strip().endswith(".ends opamp_generic")
+        assert ".model dclamp" in lowered
+
+    def test_resolve_includes_internal_model_dependencies(self) -> None:
+        text = modellib.resolve("OPAMP_GENERIC")
+        assert text.lower().index(".model dclamp") < text.lower().index(".subckt")
 
     def test_model_continuation_lines_are_included(self) -> None:
         text = modellib.resolve("2N3904")
