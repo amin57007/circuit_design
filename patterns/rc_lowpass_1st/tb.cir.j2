@@ -1,0 +1,18 @@
+* cforge testbench: {{ spec.name }} on rc_lowpass_1st
+* All values SI base units. Generated - do not edit by hand.
+{{ netlist }}
+* --- stimulus -------------------------------------------------------------
+Vin in 0 DC 0 AC 1
+* --- analyses -------------------------------------------------------------
+* .save is mandatory: in batch mode ngspice keeps no vectors without it, and
+* .meas then silently has no data to work on.
+.save v(in) v(out)
+.ac dec {{ points_per_decade }} {{ f_start | spice }} {{ f_stop | spice }}
+* --- measurements ----------------------------------------------------------
+* fc_hz: the -3.01 dB corner, found by interpolation on the swept response.
+.meas ac fc_hz WHEN vdb(out)=-3.01 FALL=1
+* gain_db_passband: two decades below the corner, where the response is flat.
+.meas ac gain_db_passband FIND vdb(out) AT={{ f_passband | spice }}
+* atten_db_at_10fc: rejection one decade past the target corner.
+.meas ac atten_db_at_10fc FIND vdb(out) AT={{ f_ten_fc | spice }}
+.end

@@ -1,0 +1,95 @@
+* circuit-forge generic device library
+*
+* Ships with the tool so every seed pattern simulates out of the box with no
+* downloads.  These are *generic stand-ins*, adequate for topology
+* verification and tolerance studies, not for datasheet-accurate margining.
+* For production numbers, drop the vendor .lib into models/ (it takes
+* precedence over this file) and reference the vendor model name.
+*
+* Units in comments are SI base units unless stated.
+
+*------------------------------------------------------------------------------
+* Diodes
+*------------------------------------------------------------------------------
+* 1N4148 small-signal switching diode.
+.model 1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=75 IBV=5u)
+
+* Sharp clamp diode used by the op-amp macromodel output limiter.
+* Not a real part: N is deliberately small so the clamp is stiff.
+.model DCLAMP D(IS=1e-15 N=0.05 RS=0.1 CJO=0)
+
+*------------------------------------------------------------------------------
+* Bipolar transistors
+*------------------------------------------------------------------------------
+* 2N3904 general-purpose NPN (Gummel-Poon).
+.model 2N3904 NPN(IS=6.734f XTI=3 EG=1.11 VAF=74.03 BF=416.4 NE=1.259
++ ISE=6.734f IKF=66.78m XTB=1.5 BR=0.7371 NC=2 ISC=0 IKR=0 RC=1
++ CJC=3.638p MJC=0.3085 VJC=0.75 FC=0.5 CJE=4.493p MJE=0.2593 VJE=0.75
++ TR=239.5n TF=301.2p ITF=0.4 VTF=4 XTF=2 RB=10)
+
+*------------------------------------------------------------------------------
+* MOSFETs
+*------------------------------------------------------------------------------
+* 2N7002 small-signal N-channel MOSFET, as a level-1 MOS.
+* Level 1 is used instead of VDMOS for portability across ngspice builds.
+* Vto = 2.0 V, Kp = 0.15 A/V^2 at W/L = 1, so gm = sqrt(2*Kp*Id).
+* Instantiate with W=100u L=100u (the SPICE defaults) for a W/L of 1.
+.model 2N7002 NMOS(LEVEL=1 VTO=2.0 KP=0.15 LAMBDA=0.01 GAMMA=0 PHI=0.6
++ RD=1.5 RS=0.2 IS=1e-14 CBD=8p CBS=8p CGSO=1n CGDO=0.2n CGBO=0)
+
+* Generic small N-channel MOSFET with a lower threshold, for 3.3 V rails.
+.model NMOS_LV NMOS(LEVEL=1 VTO=1.0 KP=0.20 LAMBDA=0.01 GAMMA=0 PHI=0.6
++ RD=1.0 RS=0.2 IS=1e-14 CBD=6p CBS=6p CGSO=1n CGDO=0.2n CGBO=0)
+
+*------------------------------------------------------------------------------
+* Op-amp macromodel
+*------------------------------------------------------------------------------
+* OPAMP_GENERIC: single dominant pole, finite open-loop gain and output
+* impedance, output clamped to within ~1.2 V of each rail.
+*
+*   nodes:  inp inn vcc vee out
+*   Aol   = 1e5      (100 dB)
+*   fp    = 10 Hz    -> GBW = 1 MHz
+*   Rout  = 50 ohm
+*   Rin   = 1 Mohm differential, 1 Gohm each input to ground (keeps the
+*           matrix non-singular when an input would otherwise float)
+*
+* Patterns that care about GBW must check it against fc; see the
+* GOTCHA-SK-02 gbw_margin check.
+.subckt OPAMP_GENERIC inp inn vcc vee out
+Rin    inp inn 1e6
+Rcmp   inp 0   1e9
+Rcmn   inn 0   1e9
+* Transconductance stage: gm * Rgain = 1e5 open-loop gain.
+Gm     0   n1  inp inn 1e-3
+Rgain  n1  0   1e8
+Cpole  n1  0   159.1549p
+* Output clamp to (vcc - 1.2) and (vee + 1.2).
+Ehi    nhi 0   vcc 0 1.0
+Vhi    nhi nhic DC 1.2
+Elo    nlo 0   vee 0 1.0
+Vlo    nloc nlo DC 1.2
+Dhi    n1  nhic DCLAMP
+Dlo    nloc n1  DCLAMP
+* Unity-gain output buffer with finite output impedance.
+Ebuf   nout 0  n1 0 1.0
+Rout   nout out 50
+.ends OPAMP_GENERIC
+
+* OPAMP_FAST: same topology, 10 MHz GBW.  Use when GOTCHA-SK-02 fires.
+.subckt OPAMP_FAST inp inn vcc vee out
+Rin    inp inn 1e6
+Rcmp   inp 0   1e9
+Rcmn   inn 0   1e9
+Gm     0   n1  inp inn 1e-3
+Rgain  n1  0   1e8
+Cpole  n1  0   15.91549p
+Ehi    nhi 0   vcc 0 1.0
+Vhi    nhi nhic DC 1.2
+Elo    nlo 0   vee 0 1.0
+Vlo    nloc nlo DC 1.2
+Dhi    n1  nhic DCLAMP
+Dlo    nloc n1  DCLAMP
+Ebuf   nout 0  n1 0 1.0
+Rout   nout out 50
+.ends OPAMP_FAST

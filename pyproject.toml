@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "circuit-forge"
+version = "0.1.0"
+description = "Deterministic CLI pipeline: circuit spec YAML -> synthesized, simulated, verified circuit with schematic and HTML report"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "circuit-forge contributors" }]
+keywords = ["spice", "ngspice", "circuit", "synthesis", "eda"]
+
+dependencies = [
+    "numpy",
+    "scipy",
+    "sympy",
+    "lcapy",
+    "schemdraw",
+    "matplotlib",
+    "pydantic>=2",
+    "pyyaml",
+    "jinja2",
+    "typer",
+    "rich",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9",
+    "ruff>=0.16",
+    "mypy>=2",
+    "types-PyYAML",
+]
+
+[project.scripts]
+cforge = "cforge.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: end-to-end tests that invoke ngspice (deselect with '-m \"not slow\"')",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N", "RET", "C4"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/cforge"]
+ignore_missing_imports = true
+warn_unused_ignores = false

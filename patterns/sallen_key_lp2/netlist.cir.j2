@@ -1,0 +1,10 @@
+* Topology: unity-gain Sallen-Key 2nd-order low-pass (equal-R form not used;
+* the capacitor ratio carries Q so the passband stays at unity gain)
+* Nodes: in -> out. na is the R1/R2 junction, nb the op-amp + input.
+{{ models }}
+R1 in na  {{ components.R1.value | spice }}
+R2 na nb  {{ components.R2.value | spice }}
+C2 nb 0   {{ components.C2.value | spice }}
+C1 na out {{ components.C1.value | spice }}
+* Op-amp as a unity-gain follower: output ties back to the inverting input.
+X1 nb out vcc vee out {{ components.X1.model if components.X1 is defined else 'OPAMP_GENERIC' }}

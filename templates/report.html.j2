@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cforge report - {{ spec.name }}</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #57606a;
+    --line: #d1d9e0;
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --pass: #1a7f37;
+    --pass-bg: #dafbe1;
+    --fail: #cf222e;
+    --fail-bg: #ffebe9;
+    --warn: #9a6700;
+    --warn-bg: #fff8c5;
+    --accent: #0969da;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 1.5rem 4rem;
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 2rem 0 0.25rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); }
+  .subtitle { color: var(--muted); margin: 0 0 1.5rem; }
+  .subtitle code { background: var(--surface); padding: 0.1rem 0.35rem; border-radius: 4px; }
+
+  .banner {
+    display: flex; align-items: center; gap: 1.25rem;
+    border-radius: 10px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    border: 2px solid;
+  }
+  .banner .verdict { font-size: 2.4rem; font-weight: 800; letter-spacing: 0.02em; line-height: 1; }
+  .banner .detail { font-size: 0.98rem; }
+  .banner.pass { background: var(--pass-bg); border-color: var(--pass); color: var(--pass); }
+  .banner.fail { background: var(--fail-bg); border-color: var(--fail); color: var(--fail); }
+  .banner.unknown { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+  .banner .detail { color: var(--fg); }
+
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); }
+  th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: #fbfcfd; }
+
+  .status { font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.82rem; }
+  .status.PASS { background: var(--pass-bg); color: var(--pass); }
+  .status.FAIL { background: var(--fail-bg); color: var(--fail); }
+  .status.NO-DATA { background: var(--warn-bg); color: var(--warn); }
+  .mc-warn { color: var(--warn); font-weight: 600; }
+
+  .schematic { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; text-align: center; }
+  .schematic svg { max-width: 100%; height: auto; }
+  figure { margin: 1.25rem 0; }
+  figure img { max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+  figcaption { color: var(--muted); font-size: 0.88rem; margin-top: 0.4rem; }
+
+  .note { border-left: 4px solid var(--warn); background: var(--warn-bg); padding: 0.6rem 0.9rem; border-radius: 0 6px 6px 0; margin: 0.5rem 0; }
+  .note.ok { border-color: var(--pass); background: var(--pass-bg); }
+  .note .gid { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.9rem; background: var(--surface); }
+  summary { cursor: pointer; font-weight: 600; }
+  pre { overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+  footer dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+  footer dt { font-weight: 600; }
+  footer dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>{{ spec.name }}</h1>
+<p class="subtitle">
+  Block <code>{{ spec.block }}</code>
+  &middot; topology <code>{{ design.pattern_id }}</code>
+  {% if pattern %}({{ pattern.meta.name }}){% endif %}
+  &middot; {{ design.components | length }} components
+  &middot; {{ spec.requirements | length }} requirements
+</p>
+
+<div class="banner {{ verdict_class }}">
+  <div class="verdict">{{ verdict }}</div>
+  <div class="detail">{{ verdict_detail }}</div>
+</div>
+
+{% if schematic_svg %}
+<h2>Schematic</h2>
+<div class="schematic">{{ schematic_svg | safe }}</div>
+{% endif %}
+
+<h2>Requirements traceability</h2>
+<table>
+  <thead>
+    <tr>
+      <th>REQ</th>
+      <th>Description</th>
+      <th>Measurement</th>
+      <th>Limit</th>
+      <th class="num">Measured</th>
+      <th class="num">Margin</th>
+      <th class="num">MC pass</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in traceability %}
+    <tr>
+      <td><strong>{{ row.id }}</strong></td>
+      <td>{{ row.description }}</td>
+      <td><code>{{ row.meas }}</code></td>
+      <td>{{ row.limit }}</td>
+      <td class="num">{{ row.value }}</td>
+      <td class="num">{{ row.margin }}</td>
+      <td class="num {% if row.mc_warn %}mc-warn{% endif %}">{{ row.mc }}</td>
+      <td><span class="status {{ row.status }}">{{ row.status }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="subtitle">
+  Every measured value above was parsed from ngspice <code>.meas</code> output.
+  Margin is headroom to the nearest bound as a percentage of that bound; negative means violated.
+</p>
+
+<h2>Bill of materials</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Ref</th>
+      <th class="num">Ideal</th>
+      <th class="num">Snapped</th>
+      <th>E-series</th>
+      <th class="num">Tolerance</th>
+      <th class="num">Deviation</th>
+      <th>SPICE model</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in bom %}
+    <tr>
+      <td><strong>{{ row.ref }}</strong></td>
+      <td class="num">{{ row.ideal }}</td>
+      <td class="num">{{ row.value }}</td>
+      <td>{{ row.eseries }}</td>
+      <td class="num">{{ row.tolerance }}</td>
+      <td class="num">{{ row.deviation }}</td>
+      <td>{{ row.model }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if sensitivity %}
+<h2>Tolerance sensitivity (Monte Carlo)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Measurement</th>
+      <th class="num">Nominal</th>
+      <th class="num">p5</th>
+      <th class="num">p50</th>
+      <th class="num">p95</th>
+      <th class="num">Worst</th>
+      <th class="num">Runs</th>
+      <th class="num">Pass rate</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in sensitivity %}
+    <tr>
+      <td><code>{{ row.meas }}</code></td>
+      <td class="num">{{ row.nominal }}</td>
+      <td class="num">{{ row.p5 }}</td>
+      <td class="num">{{ row.p50 }}</td>
+      <td class="num">{{ row.p95 }}</td>
+      <td class="num">{{ row.worst }}</td>
+      <td class="num">{{ row.n }}</td>
+      <td class="num {% if row.warn %}mc-warn{% endif %}">{{ row.pass_rate }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="subtitle">
+  Components are sampled from a uniform distribution across their tolerance band, because
+  real parts are batch-sorted rather than normally distributed around nominal.
+</p>
+{% endif %}
+
+{% if figures %}
+<h2>Plots</h2>
+{% for figure in figures %}
+<figure>
+  <img src="{{ figure.src }}" alt="{{ figure.title }}">
+  <figcaption>{{ figure.title }}</figcaption>
+</figure>
+{% endfor %}
+{% endif %}
+
+<h2>Warnings and gotchas</h2>
+{% if design.warnings %}
+  {% for warning in design.warnings %}
+  <div class="note">{{ warning }}</div>
+  {% endfor %}
+{% endif %}
+{% if design.gotchas %}
+  {% for gotcha in design.gotchas %}
+  <div class="note">
+    <span class="gid">{{ gotcha.id }}</span> &mdash; {{ gotcha.get('detail') or gotcha.get('text') }}
+  </div>
+  {% endfor %}
+{% endif %}
+{% if not design.warnings and not design.gotchas %}
+  <div class="note ok">No warnings. No pattern gotcha was triggered by this design.</div>
+{% endif %}
+
+<h2>Netlist</h2>
+<details>
+  <summary>Simulated deck ({{ netlist.splitlines() | length }} lines) &mdash; exactly what ngspice ran</summary>
+  <pre>{{ netlist }}</pre>
+</details>
+
+<footer>
+  <dl>
+    <dt>Tool</dt><dd>circuit-forge {{ tool_version }}</dd>
+    <dt>Simulator</dt><dd>{{ ngspice_version }}</dd>
+    <dt>Generated</dt><dd>{{ timestamp }}</dd>
+    <dt>Spec SHA-256</dt><dd>{{ spec_hash }}</dd>
+    <dt>Pattern</dt><dd>{{ design.pattern_id }}</dd>
+    <dt>Iterations</dt><dd>{{ design.iterations }}</dd>
+    <dt>ngspice attempts</dt><dd>{{ design.spice_attempts }}</dd>
+  </dl>
+  <p>
+    Every numeric result in this report was produced by deterministic Python or by ngspice.
+    No language model was involved in generating any value.
+  </p>
+</footer>
+
+</main>
+</body>
+</html>

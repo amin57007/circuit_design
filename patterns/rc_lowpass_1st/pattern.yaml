@@ -1,0 +1,38 @@
+id: rc_lowpass_1st
+name: First-order passive RC low-pass
+block: lowpass_filter
+requires: []
+description: >
+  A single series resistor and shunt capacitor. The simplest realisable
+  low-pass: no active devices, no supply, unconditionally stable, and it always
+  converges. Roll-off is fixed at -20 dB/decade.
+applicability:
+  order: [1, 1]
+  fc_hz: [0.1, 1.0e7]
+  gain: unity
+tradeoffs:
+  pros:
+    - two parts, no power supply, no stability question
+    - unconditionally stable and always converges in simulation
+    - noise is the resistor's thermal noise only
+  cons:
+    - only -20 dB/decade, so far-out rejection is poor
+    - output impedance rises with frequency; the next stage loads it
+    - source impedance adds directly to R and shifts fc
+gotchas:
+  - id: GOTCHA-RC-01
+    text: >
+      The corner frequency is only accurate if the load impedance is much
+      greater than R. A 10x load shifts fc by roughly 10 percent.
+    check: load_impedance
+  - id: GOTCHA-RC-02
+    text: >
+      A first-order section gives at most 20 dB of attenuation one decade past
+      fc. Any requirement tighter than that is unachievable with this topology
+      regardless of component values; use a higher-order filter.
+    check: attenuation_reachable
+provides_meas:
+  - fc_hz
+  - gain_db_passband
+  - atten_db_at_10fc
+numeric_refine: false

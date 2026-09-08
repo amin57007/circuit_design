@@ -1,0 +1,30 @@
+
+Note: No compatibility mode selected!
+
+
+Circuit: * cforge rc_lowpass_1st testbench
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+Warning: can't parse 'vd': ignored
+
+No. of Data Rows : 601
+
+Measurements for AC Analysis
+
+fc_hz               =   1.000908e+03 targ =  1.000908e+03 trig =  0.000000e+00
+gain_db_passband    =  -8.685890e-03
+atten_db_at_10fc    =  -2.003484e+01
+vrip                =  4.83291e-02 targ =  1.000000e-03
+rout_ohm            =  4.7k
+tsettle             =  120u
+
+	Node                                  Voltage
+	----                                  -------
+	out                              1.000000e+00
+	in                               1.000000e+00
+
+Total analysis time (seconds) = 0.012
+
+Total elapsed time (seconds) = 0.031

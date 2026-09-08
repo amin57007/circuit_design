@@ -1,0 +1,25 @@
+# Runtime Python dependencies for circuit-forge.
+# System requirement (not pip-installable): ngspice must be on PATH.
+#   macOS:         brew install ngspice
+#   Ubuntu/Debian: sudo apt install ngspice
+#   Windows:       WSL2 (sudo apt install ngspice) or the ngspice Windows build
+#
+# Install:
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#   pip install -e .
+#
+# Prefer `pip install -e .` / `uv pip install -e .` which reads pyproject.toml.
+# This file exists for Docker and for environments that expect a requirements.txt.
+
+numpy==2.5.3
+scipy==1.18.1
+sympy==1.14.0
+lcapy==1.26
+schemdraw==0.23
+matplotlib==3.11.1
+pydantic>=2.13.5
+PyYAML==6.0.3
+Jinja2==3.1.6
+typer==0.27.2
+rich==15.0.0

@@ -1,0 +1,7 @@
+* Topology: first-order passive RC low-pass
+* Nodes: in -> out, referenced to 0
+R1 in out {{ components.R1.value | spice }}
+C1 out 0 {{ components.C1.value | spice }}
+{% if rload_ohm %}
+Rload out 0 {{ rload_ohm | spice }}
+{% endif %}
