@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Deterministic CLI pipeline: circuit spec YAML -> synthesized, simulated, verified circuit with schematic and HTML report"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "circuit-forge contributors" }]
 keywords = ["spice", "ngspice", "circuit", "synthesis", "eda"]
 
@@ -27,7 +27,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "types-PyYAML"]
+dev = [
+    "pytest>=9",
+    "ruff>=0.16",
+    "mypy>=2",
+    "types-PyYAML",
+]
 
 [project.scripts]
 cforge = "cforge.cli:main"

@@ -1,0 +1,29 @@
+* cforge testbench: {{ spec.name }} on sallen_key_lp2
+* All values SI base units. Generated - do not edit by hand.
+{{ netlist }}
+* --- supplies and stimulus -------------------------------------------------
+Vcc vcc 0 DC {{ vpos | spice }}
+Vee vee 0 DC {{ vneg | spice }}
+Vin in 0 DC 0 AC 1
+* --- analyses -------------------------------------------------------------
+* .save is mandatory: in batch mode ngspice keeps no vectors without it, and
+* .meas then silently has no data to work on.
+.save v(in) v(out)
+.ac dec {{ points_per_decade }} {{ f_start | spice }} {{ f_stop | spice }}
+* --- measurements ----------------------------------------------------------
+* fc_hz: the -3.01 dB corner (FALL=1 takes the first downward crossing, so a
+* peaked response cannot return the rising edge of its peak instead).
+.meas ac fc_hz WHEN vdb(out)=-3.01 FALL=1
+* gain_db_passband: two decades below the corner, where the response is flat.
+.meas ac gain_db_passband FIND vdb(out) AT={{ f_passband | spice }}
+* atten_db_at_10fc: rejection one decade past the target corner.
+.meas ac atten_db_at_10fc FIND vdb(out) AT={{ f_ten_fc | spice }}
+* peak_db: passband peaking, 0 dB for a maximally flat response.
+.meas ac peak_db MAX vdb(out)
+* f0_hz and q_actual: at the pole frequency a 2nd-order low-pass is exactly
+* -90 degrees and its magnitude equals Q (for unity DC gain). That identity
+* holds for every Q, unlike peak-height inversion which degenerates at
+* Q = 1/sqrt(2). NOTE: ngspice's vp() is in RADIANS, hence -pi/2.
+.meas ac f0_hz WHEN vp(out)={{ '%.7f' % phase_minus_90_rad }}
+.meas ac q_actual FIND vm(out) WHEN vp(out)={{ '%.7f' % phase_minus_90_rad }}
+.end

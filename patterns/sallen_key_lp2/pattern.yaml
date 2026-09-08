@@ -1,0 +1,49 @@
+id: sallen_key_lp2
+name: Sallen-Key 2nd-order low-pass
+block: lowpass_filter
+requires: [opamp]
+models: [OPAMP_GENERIC]
+description: >
+  Unity-gain Sallen-Key low-pass in the equal-capacitor form: C1 = C2 = C, with
+  R1 and R2 carrying the Q. Two poles, -40 dB/decade, non-inverting, low output
+  impedance from the op-amp follower.
+applicability:
+  order: [2, 2]
+  fc_hz: [1.0, 1.0e6]
+  q_max: 3.0
+  gain: unity_or_noninverting
+tradeoffs:
+  pros:
+    - low component count for a second-order section
+    - non-inverting with low output impedance
+    - unity-gain form needs no gain-setting resistors, so no gain error
+  cons:
+    - Q is sensitive to component tolerance, badly so above Q = 3
+    - high-frequency rejection collapses above the op-amp GBW as feedback dies
+    - the op-amp must swing the full input range; no attenuation ahead of it
+gotchas:
+  - id: GOTCHA-SK-01
+    text: >
+      Q above 3 makes component sensitivity impractical: the fractional error
+      in Q grows roughly as Q times the component tolerance. Cascade two lower-Q
+      stages instead.
+    check: q_le_3
+  - id: GOTCHA-SK-02
+    text: >
+      The op-amp gain-bandwidth product must exceed roughly 100x fc for the
+      designed response to hold. Below that, loop gain runs out near the corner
+      and both fc and Q shift.
+    check: gbw_margin
+  - id: GOTCHA-SK-03
+    text: >
+      Above the op-amp's GBW the feedback path stops working and C1 couples the
+      input straight to the output, so far-out attenuation flattens instead of
+      continuing at -40 dB/decade.
+    check: hf_feedthrough
+provides_meas:
+  - fc_hz
+  - gain_db_passband
+  - q_actual
+  - peak_db
+  - atten_db_at_10fc
+numeric_refine: false

@@ -119,8 +119,41 @@ def available_models() -> dict[str, Path]:
     return {name: path for name, (path, _) in _index().items()}
 
 
-def resolve(model_name: str) -> str:
+_DEVICE_LINE_RE = re.compile(r"^\s*[A-Za-z][A-Za-z0-9_]*\s+(?P<rest>.+)$")
+_DIRECTIVE_RE = re.compile(r"^\s*[.*+]")
+
+
+def dependencies(definition: str, exclude: str = "") -> list[str]:
+    """Model names referenced by device lines inside ``definition``.
+
+    A macromodel such as ``OPAMP_GENERIC`` instantiates diodes with their own
+    ``.model`` cards.  Emitting the subcircuit without those cards produces a
+    netlist ngspice rejects with "could not find a valid modelname", so
+    :func:`resolve` follows these references automatically.  Making the user
+    enumerate a vendor model's internals in pattern.yaml would be a trap.
+    """
+    known = _index()
+    found: list[str] = []
+    for raw in definition.splitlines():
+        if _DIRECTIVE_RE.match(raw):
+            continue
+        match = _DEVICE_LINE_RE.match(raw)
+        if match is None:
+            continue
+        for token in match.group("rest").split():
+            key = token.strip().lower()
+            if key == exclude or key in found or "=" in key:
+                continue
+            if key in known:
+                found.append(key)
+    return found
+
+
+def resolve(model_name: str, _seen: frozenset[str] = frozenset()) -> str:
     """Return the ``.model`` / ``.subckt`` text defining ``model_name``.
+
+    Definitions the model itself instantiates (a macromodel's internal diodes,
+    for instance) are prepended, so the returned text is self-contained.
 
     Raises :class:`ModelNotFound` with the exact file to create when the name
     is not defined in any library on the search path.
@@ -144,17 +177,33 @@ def resolve(model_name: str) -> str:
             f"'.subckt {model_name} ...' definition, or set CFORGE_MODEL_PATH to a "
             f"directory that has one. See models/README.md."
         )
-    return entry[1]
+    definition = entry[1]
+    blocks: list[str] = []
+    for dependency in dependencies(definition, exclude=key):
+        if dependency in _seen or dependency == key:
+            continue
+        blocks.append(resolve(dependency, _seen | {key, dependency}))
+    blocks.append(definition)
+    return "\n".join(blocks)
 
 
 def resolve_many(model_names: Iterable[str]) -> str:
-    """Concatenate the definitions for several models, de-duplicated, in order."""
-    seen: set[str] = set()
+    """Concatenate the definitions for several models, de-duplicated, in order.
+
+    De-duplication spans dependencies too, so two macromodels sharing an
+    internal diode model emit that ``.model`` card only once; ngspice treats a
+    repeated definition as an error.
+    """
+    emitted: set[str] = set()
     blocks: list[str] = []
     for name in model_names:
         key = name.strip().lower()
-        if not key or key in seen:
+        if not key:
             continue
-        seen.add(key)
-        blocks.append(resolve(key))
+        for needed in [*dependencies(resolve(key), exclude=key), key]:
+            if needed in emitted:
+                continue
+            emitted.add(needed)
+            entry = _index().get(needed)
+            blocks.append(entry[1] if entry else resolve(needed))
     return "\n".join(blocks)

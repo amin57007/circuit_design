@@ -1,0 +1,30 @@
+name: sk_butterworth_2k
+block: lowpass_filter
+params:
+  fc_hz: 2000
+  order: 2
+  response: butterworth
+  gain: 1.0
+  vsupply: 5.0
+eseries: E96
+tolerance_percent:
+  R: 1.0
+  C: 5.0
+requirements:
+  - id: REQ-001
+    meas: fc_hz
+    min: 1900
+    max: 2100
+    unit: Hz
+    description: "-3 dB corner within +/-5% of 2 kHz"
+  - id: REQ-002
+    meas: atten_db_at_10fc
+    max: -35
+    unit: dB
+    description: "At least 35 dB attenuation one decade out"
+  - id: REQ-003
+    meas: gain_db_passband
+    min: -0.5
+    max: 0.5
+    unit: dB
+    description: "Flat passband, unity gain"

@@ -1,0 +1,25 @@
+# Local circuit-forge runner.
+#
+#   docker compose run --rm cforge check-env
+#   docker compose run --rm cforge design examples/lp_1k.yaml -o out --no-mc
+#   docker compose run --rm cforge design examples/sk_butterworth_2k.yaml -o out --mc 50
+#
+# Output appears in ./out on the host. Specs in ./examples are read-only.
+
+services:
+  cforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cforge:local
+    working_dir: /work
+    volumes:
+      - ./examples:/work/examples:ro
+      - ./out:/work/out
+      - ./patterns:/work/patterns:ro
+      - ./models:/work/models:ro
+    environment:
+      MPLBACKEND: Agg
+    # Pass the cforge subcommand after `--`, e.g.:
+    #   docker compose run --rm cforge -- design examples/lp_1k.yaml -o out --no-mc
+    entrypoint: ["cforge"]

@@ -280,18 +280,21 @@ def mc_histogram(
         hi = requirement.max if requirement.max is not None else ax.get_xlim()[1]
         ax.axvspan(lo, hi, color=_PASS, alpha=0.10, zorder=0, label="pass region")
         for bound, name in ((requirement.min, "min"), (requirement.max, "max")):
-            if bound is not None:
-                ax.axvline(bound, color=_FAIL, linestyle="-", linewidth=1.6)
-                ax.annotate(
-                    f"{requirement.id} {name} {bound:g}",
-                    xy=(bound, ax.get_ylim()[1]),
-                    xytext=(4, -12),
-                    textcoords="offset points",
-                    fontsize=8,
-                    color=_FAIL,
-                    rotation=90,
-                    va="top",
-                )
+            if bound is None:
+                continue
+            ax.axvline(bound, color=_FAIL, linestyle="-", linewidth=1.6)
+            # Both labels are written into the pass region so neither is
+            # clipped against the edge of the axes.
+            ax.annotate(
+                f"{requirement.id} {name} {bound:g}",
+                xy=(bound, ax.get_ylim()[1]),
+                xytext=(4 if name == "min" else -12, -12),
+                textcoords="offset points",
+                fontsize=8,
+                color=_FAIL,
+                rotation=90,
+                va="top",
+            )
 
     ax.axvline(
         result.nominal,
